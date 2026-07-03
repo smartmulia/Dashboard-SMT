@@ -1,0 +1,104 @@
+================================================================
+CARA IMPORT DATABASE — DASHBOARD SMT ELEKTRONIK
+================================================================
+
+ADA 2 CARA YANG BISA DIPAKAI:
+- Cara A: Via phpMyAdmin (lebih mudah, cocok untuk pemula)
+- Cara B: Via MySQL Command Line (lebih cepat)
+
+================================================================
+CARA A: VIA phpMyAdmin
+================================================================
+
+Prasyarat: XAMPP atau Laragon sudah berjalan, buka:
+→ http://localhost/phpmyadmin
+
+LANGKAH:
+
+1. Klik tab "SQL" di bagian atas phpMyAdmin
+
+2. Copy seluruh isi file:
+   database\00_JALANKAN_SEMUA.sql
+
+3. Paste ke kotak SQL di phpMyAdmin
+
+4. Klik tombol "Go" (atau Ctrl+Enter)
+
+5. Tunggu sampai muncul pesan hijau:
+   "SETUP DATABASE SELESAI"
+
+6. Selesai! Database sudah siap.
+
+Alternatif — Import via file:
+1. Klik "Import" di menu atas
+2. Pilih file: database\00_JALANKAN_SEMUA.sql
+3. Klik "Go"
+
+================================================================
+CARA B: VIA COMMAND LINE (MySQL)
+================================================================
+
+1. Buka Command Prompt atau PowerShell
+
+2. Masuk ke MySQL:
+   mysql -u root -p
+   (masukkan password MySQL Anda)
+
+3. Jalankan script:
+   SOURCE C:/Users/USER/Documents/PDCA/SMT/PROJECT SMT/Dashboard SMT/Dashboard Elektronik/database/00_JALANKAN_SEMUA.sql
+
+4. Tunggu sampai selesai dan muncul output ringkasan.
+
+Atau bisa langsung dari luar MySQL:
+   mysql -u root -p < "C:\Users\USER\Documents\PDCA\SMT\PROJECT SMT\Dashboard SMT\Dashboard Elektronik\database\00_JALANKAN_SEMUA.sql"
+
+================================================================
+URUTAN SCRIPT (Jika ingin jalankan manual satu per satu)
+================================================================
+
+01_create_database.sql  → Buat database dashboard_smt
+02_create_tables.sql    → Buat semua tabel
+03_seed_data.sql        → Isi data awal (user & contoh barang)
+04_views_and_queries.sql→ Buat views & stored procedure
+05_useful_queries.sql   → Query operasional (referensi saja)
+
+================================================================
+SETELAH DATABASE SIAP
+================================================================
+
+Pastikan file backend/.env sudah diisi dengan benar:
+
+DATABASE_URL="mysql://USERNAME:PASSWORD@localhost:3306/dashboard_smt"
+
+Ganti USERNAME dan PASSWORD dengan data MySQL Anda.
+Contoh: mysql://root:admin123@localhost:3306/dashboard_smt
+
+Kemudian jalankan:
+→ jalankan-backend.bat
+→ jalankan-frontend.bat
+
+================================================================
+AKUN LOGIN DEFAULT (Password: admin123)
+================================================================
+
+Role ADMIN     : admin@smt.com
+Role SUPER USER: superuser@smt.com
+Role USER      : user@smt.com
+
+================================================================
+TROUBLESHOOTING
+================================================================
+
+ERROR: "Access denied for user"
+→ Periksa username & password di .env sudah benar
+
+ERROR: "Can't connect to MySQL server"
+→ Pastikan XAMPP/MySQL sudah dijalankan
+
+ERROR: "Unknown database"
+→ Jalankan dahulu: 01_create_database.sql
+
+ERROR: "Table already exists"
+→ Tidak masalah — script menggunakan IF NOT EXISTS
+
+================================================================

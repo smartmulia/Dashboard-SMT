@@ -1,0 +1,125 @@
+================================================================
+  DESAIN DATABASE — DASHBOARD SMT ELEKTRONIK
+  Versi   : 1.0
+  Database: MySQL 8.0+
+  Nama DB : dashboard_smt
+================================================================
+
+================================================================
+  ENTITY RELATIONSHIP DIAGRAM (ERD)
+================================================================
+
+  ┌─────────────────┐         ┌──────────────────────────────┐
+  │     users       │         │         elektronik            │
+  ├─────────────────┤         ├──────────────────────────────┤
+  │ PK id           │         │ PK id                        │
+  │    nama         │         │ UK nomor_sbg                 │
+  │ UK email        │         │    grade    (ENUM A/B/C/D)   │
+  │    password     │         │    jenis_barang               │
+  │    role         │         │    detail_barang              │
+  │    is_active    │         │    keterangan                 │
+  │    created_at   │         │    cogs                      │
+  │    updated_at   │         │    offering_pengepul         │
+  └────────┬────────┘         │    harga_jual                │
+           │                  │    ppn                       │
+           │ 1                │    total_harga               │
+           │                  │    profit                    │
+           │                  │    status (ENUM)             │
+           │ *                │    perusahaan (ENUM)         │
+  ┌────────┴────────┐         │    tanggal_masuk             │
+  │    invoices     │         │    created_at                │
+  ├─────────────────┤         │    updated_at                │
+  │ PK id           │         └──────────────┬───────────────┘
+  │ UK nomor_invoice│                        │
+  │    nama_customer│                        │ 1
+  │    no_telepon   │                        │
+  │    tgl_invoice  │         ┌──────────────┴───────────────┐
+  │    perusahaan   │         │       invoice_items          │
+  │    status       │         ├──────────────────────────────┤
+  │    catatan      │         │ PK id                        │
+  │ FK created_by_id├────────►│ FK invoice_id               │
+  │    approved_by_id│        │ FK elektronik_id            │
+  │    approved_nama│         │    nomor_sbg                 │
+  │    approved_at  │         │    jenis_barang              │
+  │    rejected_at  │         │    detail_barang             │
+  │    rejected_rsn │         │    harga_jual                │
+  │    printed_at   │◄────────┤    ppn                      │
+  │    created_at   │ 1    *  │    total_harga              │
+  │    updated_at   │         └──────────────────────────────┘
+  └────────┬────────┘
+           │ 1
+           │
+           │ *
+  ┌────────┴────────┐
+  │   audit_logs    │
+  ├─────────────────┤
+  │ PK id           │
+  │ FK user_id (NK) │
+  │    nama_user    │
+  │    aktivitas    │
+  │    tabel        │
+  │    data_lama    │ (JSON)
+  │    data_baru    │ (JSON)
+  │    ip_address   │
+  │    created_at   │
+  └─────────────────┘
+
+================================================================
+  KETERANGAN RELASI
+================================================================
+
+  users        → invoices      : 1 user bisa buat banyak invoice
+  invoices     → invoice_items : 1 invoice punya banyak item
+  elektronik   → invoice_items : 1 barang bisa masuk 1 invoice
+  users        → audit_logs    : 1 user punya banyak log (nullable)
+
+================================================================
+  ENUM VALUES
+================================================================
+
+  ROLE:
+    - ADMIN       : Akses penuh + kelola user
+    - SUPER_USER  : Bisa lihat COGS, tidak bisa kelola user
+    - USER        : Tidak bisa lihat COGS, tidak bisa delete
+
+  GRADE:
+    - A : Kualitas terbaik
+    - B : Kualitas baik
+    - C : Kualitas cukup
+    - D : Kualitas rendah
+
+  STATUS_BARANG:
+    - BELUM_TERJUAL : Stok tersedia
+    - TERJUAL       : Sudah laku / sudah masuk invoice printed
+
+  INVOICE_STATUS:
+    - DRAFT            : Baru dibuat, belum disubmit
+    - WAITING_APPROVAL : Sudah disubmit, menunggu admin
+    - APPROVED         : Disetujui admin, siap cetak
+    - REJECTED         : Ditolak admin, kembali ke user
+    - PRINTED          : Sudah dicetak, status barang → TERJUAL
+
+  PERUSAHAAN:
+    - VOLARY    : Menggunakan logo Volary (emas)
+    - SERBA_MAS : Menggunakan logo SerbaMAS (emas+hijau)
+
+================================================================
+  PERHITUNGAN OTOMATIS
+================================================================
+
+  PPN         = Harga Jual × 1.1%   (0.011)
+  Total Harga = Harga Jual + PPN
+  Profit      = Harga Jual - COGS
+
+================================================================
+  INDEX STRATEGY
+================================================================
+
+  elektronik   : idx_nomor_sbg (UK), idx_grade, idx_status,
+                 idx_perusahaan, idx_jenis_barang, idx_tgl_masuk
+  invoices     : idx_nomor_invoice (UK), idx_status,
+                 idx_created_by, idx_tgl_invoice
+  invoice_items: idx_invoice_id, idx_elektronik_id
+  audit_logs   : idx_user_id, idx_created_at, idx_aktivitas
+
+================================================================

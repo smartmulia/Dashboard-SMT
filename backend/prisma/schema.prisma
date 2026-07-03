@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  nama         String
+  email        String        @unique
+  password     String
+  role         Role          @default(USER)
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  auditLogs    AuditLog[]
+  invoices     Invoice[]
+  notifikasi   Notifikasi[]
+
+  @@map("users")
+}
+
+model Notifikasi {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  judul     String
+  pesan     String   @db.Text
+  tipe      String
+  invoiceId Int?     @map("invoice_id")
+  dibaca    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("notifikasi")
+}
+
+model Elektronik {
+  id               Int          @id @default(autoincrement())
+  nomorSbg         String       @unique @map("nomor_sbg")
+  grade            Grade
+  jenisBarang      String       @map("jenis_barang")
+  detailBarang     String       @map("detail_barang")
+  keterangan       String?      @db.Text
+  cogs             Decimal      @db.Decimal(15, 2)
+  offeringPengepul Decimal?     @db.Decimal(15, 2) @map("offering_pengepul")
+  hargaJual        Decimal?     @db.Decimal(15, 2) @map("harga_jual")
+  ppn              Decimal?     @db.Decimal(15, 2)
+  totalHarga       Decimal?     @db.Decimal(15, 2) @map("total_harga")
+  profit           Decimal?     @db.Decimal(15, 2)
+  status           StatusBarang @default(BELUM_TERJUAL)
+  perusahaan       Perusahaan   @default(SERBA_MAS)
+  tanggalMasuk     DateTime     @default(now()) @map("tanggal_masuk")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  invoiceItems     InvoiceItem[]
+
+  @@map("elektronik")
+}
+
+model Invoice {
+  id             Int           @id @default(autoincrement())
+  nomorInvoice   String        @unique @map("nomor_invoice")
+  namaCustomer   String        @map("nama_customer")
+  noTelepon      String?       @map("no_telepon")
+  tanggalInvoice DateTime      @map("tanggal_invoice")
+  perusahaan     Perusahaan    @default(SERBA_MAS)
+  status         InvoiceStatus @default(DRAFT)
+  catatan        String?       @db.Text
+  approvedById   Int?          @map("approved_by_id")
+  approvedByNama String?       @map("approved_by_nama")
+  approvedAt     DateTime?     @map("approved_at")
+  rejectedAt     DateTime?     @map("rejected_at")
+  rejectedReason String?       @db.Text @map("rejected_reason")
+  printedAt      DateTime?     @map("printed_at")
+  createdById    Int           @map("created_by_id")
+  createdBy      User          @relation(fields: [createdById], references: [id])
+  items          InvoiceItem[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id           Int        @id @default(autoincrement())
+  invoiceId    Int        @map("invoice_id")
+  invoice      Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  elektronikId Int        @map("elektronik_id")
+  elektronik   Elektronik @relation(fields: [elektronikId], references: [id])
+  nomorSbg     String     @map("nomor_sbg")
+  jenisBarang  String     @map("jenis_barang")
+  detailBarang String     @map("detail_barang")
+  hargaJual    Decimal    @db.Decimal(15, 2) @map("harga_jual")
+  ppn          Decimal    @db.Decimal(15, 2)
+  totalHarga   Decimal    @db.Decimal(15, 2) @map("total_harga")
+
+  @@map("invoice_items")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  namaUser  String?  @map("nama_user")
+  aktivitas String
+  tabel     String?
+  dataLama  Json?    @map("data_lama")
+  dataBaru  Json?    @map("data_baru")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
+
+enum Role {
+  ADMIN
+  SUPER_USER
+  USER
+  KATALOG_USER
+}
+
+enum Grade {
+  A
+  B
+  C
+  D
+}
+
+enum StatusBarang {
+  BELUM_TERJUAL
+  TERJUAL
+}
+
+enum InvoiceStatus {
+  DRAFT
+  WAITING_APPROVAL
+  APPROVED
+  REJECTED
+  PRINTED
+}
+
+enum Perusahaan {
+  VOLARY
+  SERBA_MAS
+}
+
+model Cabang {
+  id        Int           @id @default(autoincrement())
+  nama      String
+  alamat    String?       @db.Text
+  aktif     Boolean       @default(true)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  katalog   KatalogEmas[]
+
+  @@map("cabang")
+}
+
+model KatalogEmas {
+  id          Int      @id @default(autoincrement())
+  cabangId    Int?     @map("cabang_id")
+  cabang      Cabang?  @relation(fields: [cabangId], references: [id])
+  kategori    KategoriEmas
+  jenisBarang String   @map("jenis_barang")
+  nama        String
+  deskripsi   String?  @db.Text
+  harga       Decimal  @db.Decimal(15, 2)
+  gambar      String?
+  tersedia    Boolean  @default(true)
+  urutan      Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("katalog_emas")
+}
+
+enum KategoriEmas {
+  PERHIASAN
+  LM
+}

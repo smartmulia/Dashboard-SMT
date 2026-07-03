@@ -1,0 +1,138 @@
+================================================================
+  DASHBOARD SMT - ELEKTRONIK
+  Panduan Menjalankan Aplikasi
+================================================================
+
+PENYEBAB ERROR "package.json not found":
+→ npm dijalankan di folder yang SALAH.
+→ Jangan jalankan npm di folder "Dashboard Elektronik" utama.
+→ npm harus dijalankan di dalam folder "backend" atau "frontend".
+→ Gunakan file .bat yang sudah disediakan, lebih aman!
+
+================================================================
+STRUKTUR FOLDER (PENTING DIPAHAMI)
+================================================================
+
+  Dashboard Elektronik\          ← Folder utama (JANGAN npm di sini)
+  ├── backend\                   ← npm install di sini untuk backend
+  │   ├── package.json           ← File config backend
+  │   ├── server.js
+  │   ├── .env                   ← Edit ini: isi DATABASE_URL
+  │   └── prisma\
+  ├── frontend\                  ← npm install di sini untuk frontend
+  │   └── package.json           ← File config frontend
+  ├── database\                  ← Script SQL
+  │   └── 00_JALANKAN_SEMUA.sql ← Import ini ke phpMyAdmin
+  ├── install-semua.bat          ← Install semua package sekaligus
+  ├── setup-database.bat         ← Setup database (prisma migrate)
+  ├── jalankan-backend.bat       ← Jalankan server backend
+  └── jalankan-frontend.bat      ← Jalankan tampilan web
+
+================================================================
+LANGKAH 1 — PASTIKAN SOFTWARE INI SUDAH TERINSTALL
+================================================================
+
+  Node.js versi 18+  → https://nodejs.org  (pilih LTS)
+  MySQL versi 8+     → via XAMPP / Laragon / MySQL Installer
+
+  Cek apakah Node.js sudah ada:
+  → Buka CMD, ketik: node --version
+  → Harusnya muncul: v18.x.x atau lebih tinggi
+
+================================================================
+LANGKAH 2 — INSTALL SEMUA PACKAGE (Pertama kali saja)
+================================================================
+
+  Klik 2x file: install-semua.bat
+  Tunggu sampai selesai (bisa 2-5 menit, tergantung internet)
+
+================================================================
+LANGKAH 3 — SETUP DATABASE
+================================================================
+
+  ADA 2 PILIHAN:
+
+  PILIHAN A (Lebih mudah — via phpMyAdmin):
+  -----------------------------------------
+  1. Buka http://localhost/phpmyadmin
+  2. Klik tab "SQL"
+  3. Copy isi file: database\00_JALANKAN_SEMUA.sql
+  4. Paste dan klik "Go"
+  5. Edit file backend\.env:
+     Ganti: DATABASE_URL="mysql://root:PASSWORD@localhost:3306/dashboard_smt"
+     (ganti PASSWORD dengan password MySQL Anda)
+  6. Lanjut ke Langkah 4
+
+  PILIHAN B (Via Prisma — otomatis):
+  -----------------------------------
+  1. Edit dulu backend\.env → isi DATABASE_URL yang benar
+  2. Klik 2x file: setup-database.bat
+  3. Tunggu sampai selesai
+
+================================================================
+LANGKAH 4 — JALANKAN BACKEND
+================================================================
+
+  Klik 2x: jalankan-backend.bat
+  Tunggu sampai muncul: "Server berjalan di port 5000"
+
+  JANGAN TUTUP jendela ini!
+
+================================================================
+LANGKAH 5 — JALANKAN FRONTEND
+================================================================
+
+  Buka jendela CMD/Explorer BARU
+  Klik 2x: jalankan-frontend.bat
+
+  Browser akan terbuka otomatis di: http://localhost:5173
+
+================================================================
+CARA MANUAL (Jika .bat tidak bisa diklik)
+================================================================
+
+Buka CMD, jalankan satu per satu:
+
+  -- Install backend --
+  cd "C:\Users\USER\Documents\PDCA\SMT\PROJECT SMT\Dashboard SMT\Dashboard Elektronik\backend"
+  npm install
+  npm run dev
+
+  -- Install frontend (CMD baru) --
+  cd "C:\Users\USER\Documents\PDCA\SMT\PROJECT SMT\Dashboard SMT\Dashboard Elektronik\frontend"
+  npm install
+  npm run dev
+
+================================================================
+AKUN LOGIN DEFAULT
+================================================================
+
+  ADMIN      : admin@smt.com      / admin123
+  SUPER USER : superuser@smt.com  / admin123
+  USER BIASA : user@smt.com       / admin123
+
+================================================================
+DAFTAR ERROR DAN SOLUSINYA
+================================================================
+
+ERROR: "package.json not found" atau "ENOENT"
+→ npm dijalankan di folder yang salah
+→ Gunakan file .bat, atau pastikan masuk ke folder backend/frontend
+
+ERROR: "Cannot connect to database"
+→ MySQL belum aktif — nyalakan XAMPP/Laragon
+→ DATABASE_URL di backend\.env salah — periksa username & password
+
+ERROR: "Port 5000 already in use"
+→ Ganti di backend\.env: PORT=5001
+
+ERROR: "Port 5173 already in use"
+→ Di frontend, jalankan: npm run dev -- --port 5174
+
+ERROR: "'node' is not recognized"
+→ Node.js belum terinstall — download di https://nodejs.org
+
+ERROR: "prisma: command not found"
+→ Jalankan dulu: npm install (di folder backend)
+
+================================================================
