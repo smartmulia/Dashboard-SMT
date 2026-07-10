@@ -1,6 +1,13 @@
-import { Package, TrendingUp, DollarSign, BarChart3, ShoppingCart, XCircle } from 'lucide-react'
+import { Package, TrendingUp, ShoppingCart, Hourglass } from 'lucide-react'
 import { formatRupiah } from '../../utils/format'
 import { useAuth } from '../../contexts/AuthContext'
+
+// Ikon "Rp" berbasis teks (pengganti simbol dollar)
+function RpIcon({ className = '' }) {
+  return (
+    <span className={`inline-flex items-center justify-center font-extrabold text-base leading-none ${className}`}>Rp</span>
+  )
+}
 
 function StatCard({ icon: Icon, label, value, sub, color, bgColor, iconBg }) {
   return (
@@ -45,7 +52,7 @@ export default function SummaryCards({ stats, loading }) {
       iconBg: 'bg-gold-200/50 dark:bg-gold-900/20',
     },
     {
-      icon: DollarSign,
+      icon: RpIcon,
       label: 'Total COGS',
       value: canSeeCogs() ? formatRupiah(stats?.totalCogs) : '••••••',
       sub: canSeeCogs() ? 'Nilai modal seluruh barang' : 'Tidak memiliki akses',
@@ -54,26 +61,26 @@ export default function SummaryCards({ stats, loading }) {
     },
     {
       icon: ShoppingCart,
-      label: 'Total Harga Jual',
-      value: formatRupiah(stats?.totalHargaJual),
-      sub: 'Before Tax',
+      label: 'Pendapatan Terealisasi',
+      value: formatRupiah(stats?.hargaJualRiil),
+      sub: `Dari ${stats?.totalTerjual || 0} barang terjual (before tax)`,
       color: 'text-emerald-700 dark:text-emerald-400',
       iconBg: 'bg-emerald-100 dark:bg-emerald-900/20',
     },
     {
       icon: TrendingUp,
-      label: 'Total Profit',
-      value: formatRupiah(stats?.totalProfit),
-      sub: `Margin: ${stats?.persentaseProfit || 0}%`,
+      label: 'Profit Terealisasi',
+      value: formatRupiah(stats?.profitRiil),
+      sub: `Margin riil ${stats?.marginRiil || 0}% · hanya barang TERJUAL`,
       color: 'text-gold-700 dark:text-gold-400',
       iconBg: 'bg-gold-100 dark:bg-gold-900/20',
     },
     {
-      icon: BarChart3,
-      label: '% Profit',
-      value: `${stats?.persentaseProfit || 0}%`,
-      sub: 'Profit / Harga Jual',
-      color: stats?.persentaseProfit >= 20 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+      icon: Hourglass,
+      label: 'Potensi Profit',
+      value: formatRupiah(stats?.profitProyeksi),
+      sub: `Proyeksi dari ${stats?.totalBelumTerjual || 0} barang belum terjual`,
+      color: 'text-amber-600 dark:text-amber-400',
       iconBg: 'bg-amber-100 dark:bg-amber-900/20',
     },
   ]

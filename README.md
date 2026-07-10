@@ -184,14 +184,21 @@ Aplikasi berjalan di `http://localhost:5173`.
 
 ```
 DRAFT → WAITING_APPROVAL → APPROVED → PRINTED
-                        ↘ REJECTED
+  │                     ↘ REJECTED       │
+  ↓ (hapus)                              ↓
+ [terhapus]              APPROVED/PRINTED → CANCELLED (barang kembali BELUM_TERJUAL)
 ```
 
 1. **USER/SUPER_USER** membuat invoice (status `DRAFT`)
-2. Klik **Submit** → status `WAITING_APPROVAL`, notifikasi dikirim ke semua ADMIN
-3. **ADMIN** menyetujui → status `APPROVED`, notifikasi dikirim ke pembuat
-4. **ADMIN** menolak → status `REJECTED` dengan alasan, notifikasi dikirim ke pembuat
-5. Invoice yang di-approve dapat dicetak/download PDF → status `PRINTED`
+   - Barang harus sudah punya harga jual > 0
+   - Barang tidak boleh sudah ada di invoice aktif lain (cegah double-counting)
+2. Invoice `DRAFT` bisa **dihapus** oleh pembuatnya jika salah input
+3. Klik **Submit** → status `WAITING_APPROVAL`, notifikasi dikirim ke semua ADMIN
+4. **ADMIN** menyetujui → status `APPROVED`, barang ditandai `TERJUAL`, notifikasi ke pembuat
+   - ADMIN tidak dapat menyetujui invoice yang dibuat sendiri (segregation of duties)
+5. **ADMIN** menolak → status `REJECTED` dengan alasan, notifikasi ke pembuat
+6. Invoice yang di-approve dapat dicetak/download PDF → status `PRINTED`
+7. **ADMIN** dapat **membatalkan** invoice `APPROVED`/`PRINTED` → status `CANCELLED`, seluruh barang dikembalikan ke `BELUM_TERJUAL`
 
 ---
 

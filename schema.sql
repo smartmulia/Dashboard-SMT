@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS `elektronik` (
   `profit`            DECIMAL(15,2)   NULL,
   `status`            ENUM('BELUM_TERJUAL','TERJUAL') NOT NULL DEFAULT 'BELUM_TERJUAL',
   `perusahaan`        ENUM('VOLARY','SERBA_MAS')      NOT NULL DEFAULT 'SERBA_MAS',
+  `tanggal_lelang`    DATETIME(3)     NULL,
   `tanggal_masuk`     DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `created_at`        DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updated_at`        DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -66,7 +67,8 @@ CREATE TABLE IF NOT EXISTS `elektronik` (
   UNIQUE KEY `elektronik_nomor_sbg_key` (`nomor_sbg`),
   KEY `elektronik_status_idx` (`status`),
   KEY `elektronik_perusahaan_idx` (`perusahaan`),
-  KEY `elektronik_tanggal_masuk_idx` (`tanggal_masuk`)
+  KEY `elektronik_tanggal_masuk_idx` (`tanggal_masuk`),
+  KEY `elektronik_tanggal_lelang_idx` (`tanggal_lelang`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -79,7 +81,7 @@ CREATE TABLE IF NOT EXISTS `invoices` (
   `no_telepon`       VARCHAR(191)    NULL,
   `tanggal_invoice`  DATETIME(3)     NOT NULL,
   `perusahaan`       ENUM('VOLARY','SERBA_MAS') NOT NULL DEFAULT 'SERBA_MAS',
-  `status`           ENUM('DRAFT','WAITING_APPROVAL','APPROVED','REJECTED','PRINTED') NOT NULL DEFAULT 'DRAFT',
+  `status`           ENUM('DRAFT','WAITING_APPROVAL','APPROVED','REJECTED','PRINTED','CANCELLED') NOT NULL DEFAULT 'DRAFT',
   `catatan`          TEXT            NULL,
   `approved_by_id`   INT             NULL,
   `approved_by_nama` VARCHAR(191)    NULL,

@@ -101,9 +101,10 @@ export async function generateInvoicePDF(invoice) {
   doc.setLineWidth(0.5)
   doc.line(margin, 76, pageW - margin, 76)
 
-  // Table — tanpa kolom Nomor SBG
+  // Table — dengan kolom Nomor SBG untuk rekonsiliasi barang fisik
   const tableData = invoice.items.map((item, i) => [
     i + 1,
+    item.nomorSbg || '-',
     item.jenisBarang,
     item.detailBarang,
     formatRupiah(item.hargaJual),
@@ -113,10 +114,10 @@ export async function generateInvoicePDF(invoice) {
 
   doc.autoTable({
     startY: 80,
-    head: [['No', 'Jenis Barang', 'Detail Barang', 'Harga Jual', 'PPN (1.1%)', 'Total Harga']],
+    head: [['No', 'No. SBG', 'Jenis Barang', 'Detail Barang', 'Harga Jual', 'PPN (1.1%)', 'Total Harga']],
     body: tableData,
     margin: { left: margin, right: margin },
-    styles: { fontSize: 9, cellPadding: 3 },
+    styles: { fontSize: 8.5, cellPadding: 2.5 },
     headStyles: {
       fillColor: primaryColor,
       textColor: [255, 255, 255],
@@ -125,10 +126,11 @@ export async function generateInvoicePDF(invoice) {
     },
     alternateRowStyles: { fillColor: [250, 246, 240] },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      3: { halign: 'right' },
+      0: { halign: 'center', cellWidth: 8 },
+      1: { cellWidth: 22 },
       4: { halign: 'right' },
-      5: { halign: 'right', fontStyle: 'bold' },
+      5: { halign: 'right' },
+      6: { halign: 'right', fontStyle: 'bold' },
     },
   })
 

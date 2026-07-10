@@ -452,10 +452,13 @@ function ModalKelolaCabang({ cabangList, onRefresh, onClose }) {
 }
 
 /* ─── Card untuk mode layar penuh (tanpa aksi) ─── */
-function KatalogPresentCard({ item }) {
+function KatalogPresentCard({ item, onClick }) {
   const [imgError, setImgError] = useState(false)
   return (
-    <div className={`bg-white rounded-2xl overflow-hidden shadow-md flex flex-col transition-transform duration-200 hover:scale-[1.02] hover:shadow-xl ${!item.tersedia ? 'opacity-50' : ''}`}>
+    <div
+      onClick={onClick}
+      className={`bg-white rounded-2xl overflow-hidden shadow-md flex flex-col transition-transform duration-200 hover:scale-[1.02] hover:shadow-xl cursor-pointer ${!item.tersedia ? 'opacity-50' : ''}`}
+    >
       <div className="relative bg-amber-50 aspect-square overflow-hidden">
         {item.gambar && !imgError ? (
           <img src={item.gambar} alt={item.nama} className="w-full h-full object-cover" onError={() => setImgError(true)} />
@@ -490,6 +493,90 @@ function KatalogPresentCard({ item }) {
   )
 }
 
+/* ─── Modal Detail Produk (dalam mode layar penuh) ─── */
+function KatalogDetailModal({ item, onClose }) {
+  const [imgError, setImgError] = useState(false)
+  if (!item) return null
+
+  return (
+    <div
+      className="absolute inset-0 z-[10000] flex items-center justify-center p-4 sm:p-8 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl overflow-hidden shadow-2xl w-full max-w-4xl max-h-full flex flex-col md:flex-row"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Foto */}
+        <div className="relative md:w-1/2 bg-amber-50 aspect-square md:aspect-auto shrink-0">
+          {item.gambar && !imgError ? (
+            <img src={item.gambar} alt={item.nama} className="w-full h-full object-cover" onError={() => setImgError(true)} />
+          ) : (
+            <div className="w-full h-full min-h-[16rem] flex flex-col items-center justify-center text-amber-200">
+              {item.kategori === 'LM' ? <Package className="w-24 h-24" /> : <Gem className="w-24 h-24" />}
+            </div>
+          )}
+          <div className="absolute top-4 left-4">
+            <span className={`text-xs font-bold px-3 py-1.5 rounded-full shadow ${
+              item.kategori === 'LM' ? 'bg-amber-400 text-amber-900' : 'bg-yellow-500 text-yellow-900'
+            }`}>
+              {item.kategori === 'LM' ? 'Logam Mulia' : item.jenisBarang}
+            </span>
+          </div>
+        </div>
+
+        {/* Detail */}
+        <div className="md:w-1/2 p-6 sm:p-8 flex flex-col overflow-y-auto">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="font-extrabold text-stone-800 text-2xl leading-tight">{item.nama}</h2>
+            <button
+              onClick={onClose}
+              className="shrink-0 w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-500 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between border-b border-amber-100 pb-2">
+              <span className="text-stone-400">Kategori</span>
+              <span className="font-semibold text-stone-700">{item.kategori === 'LM' ? 'Logam Mulia' : 'Perhiasan'}</span>
+            </div>
+            <div className="flex justify-between border-b border-amber-100 pb-2">
+              <span className="text-stone-400">Jenis</span>
+              <span className="font-semibold text-stone-700">{item.jenisBarang}</span>
+            </div>
+            {item.cabang?.nama && (
+              <div className="flex justify-between border-b border-amber-100 pb-2">
+                <span className="text-stone-400">Cabang</span>
+                <span className="font-semibold text-stone-700">{item.cabang.nama}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-b border-amber-100 pb-2">
+              <span className="text-stone-400">Status</span>
+              <span className={`font-semibold ${item.tersedia ? 'text-emerald-600' : 'text-red-500'}`}>
+                {item.tersedia ? 'Tersedia' : 'Tidak Tersedia'}
+              </span>
+            </div>
+          </div>
+
+          {item.deskripsi && (
+            <div className="mt-4">
+              <p className="text-xs text-stone-400 uppercase tracking-wide font-semibold mb-1">Deskripsi</p>
+              <p className="text-sm text-stone-600 leading-relaxed">{item.deskripsi}</p>
+            </div>
+          )}
+
+          <div className="mt-auto pt-6">
+            <p className="text-xs text-stone-400 uppercase tracking-wide font-semibold">Harga</p>
+            <p className="text-yellow-700 font-extrabold text-3xl tracking-tight mt-1">{formatRupiah(item.harga)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Layar Penuh ─── */
 function KatalogLayarPenuh({ cabangList, onClose }) {
   const [items, setItems] = useState([])
@@ -497,16 +584,27 @@ function KatalogLayarPenuh({ cabangList, onClose }) {
   const [selectedCabang, setSelectedCabang] = useState(null)
   const [kategori, setKategori] = useState('')
   const [search, setSearch] = useState('')
+  const [detailItem, setDetailItem] = useState(null)
   const containerRef = useRef(null)
   // Ref untuk onClose agar tidak perlu masuk dependency useEffect
   const onCloseRef = useRef(onClose)
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
+  // Ref untuk state modal detail agar handler Escape selalu baca nilai terbaru
+  const detailRef = useRef(null)
 
   // Fullscreen browser + listener Escape — hanya jalan sekali saat mount
   useEffect(() => {
     const el = containerRef.current
     if (el?.requestFullscreen) el.requestFullscreen().catch(() => {})
-    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current() }
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      // Jika modal detail terbuka, tutup modal dulu (jangan keluar layar penuh)
+      if (detailRef.current) {
+        setDetailItem(null)
+      } else {
+        onCloseRef.current()
+      }
+    }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
@@ -530,6 +628,9 @@ function KatalogLayarPenuh({ cabangList, onClose }) {
   }, [selectedCabang])
 
   useEffect(() => { fetchItems() }, [fetchItems])
+
+  // Jaga ref modal detail selalu sinkron dengan state (dipakai handler Escape)
+  useEffect(() => { detailRef.current = detailItem }, [detailItem])
 
   // Filter kategori & search dilakukan di sisi client (instan, tanpa fetch ulang)
   const filtered = items.filter(item => {
@@ -647,11 +748,14 @@ function KatalogLayarPenuh({ cabangList, onClose }) {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
             {filtered.map(item => (
-              <KatalogPresentCard key={item.id} item={item} />
+              <KatalogPresentCard key={item.id} item={item} onClick={() => setDetailItem(item)} />
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal detail produk */}
+      <KatalogDetailModal item={detailItem} onClose={() => setDetailItem(null)} />
     </div>
   )
 }

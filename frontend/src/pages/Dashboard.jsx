@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import api from '../utils/api'
 import toast from 'react-hot-toast'
 import SummaryCards from '../components/Dashboard/SummaryCards'
-import { TrendProfitRugiChart, ProfitTable, RugiTable, TopProfitChart, TopHargaJualChart } from '../components/Dashboard/Charts'
+import { TrendProfitRugiChart, ProfitTable, RugiTable } from '../components/Dashboard/Charts'
 import { RefreshCw, Calendar, X } from 'lucide-react'
 
 const today = () => new Date().toISOString().split('T')[0]
@@ -154,12 +154,6 @@ export default function Dashboard() {
 
       {/* Tabel Rugi per Bulan */}
       <RugiTable data={stats?.trendRugi} loading={loading} />
-
-      {/* Top Profit + Top Harga Jual */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TopProfitChart data={stats?.topProfit} loading={loading} />
-        <TopHargaJualChart data={stats?.topHargaJual} loading={loading} />
-      </div>
 
       {/* Info bar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -52,11 +52,17 @@ model Elektronik {
   profit           Decimal?     @db.Decimal(15, 2)
   status           StatusBarang @default(BELUM_TERJUAL)
   perusahaan       Perusahaan   @default(SERBA_MAS)
+  tanggalLelang    DateTime?    @map("tanggal_lelang")
   tanggalMasuk     DateTime     @default(now()) @map("tanggal_masuk")
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
   invoiceItems     InvoiceItem[]
 
+  @@index([status])
+  @@index([perusahaan])
+  @@index([grade])
+  @@index([tanggalMasuk])
+  @@index([tanggalLelang])
   @@map("elektronik")
 }
 
@@ -81,6 +87,8 @@ model Invoice {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
+  @@index([status])
+  @@index([createdById])
   @@map("invoices")
 }
 
@@ -140,6 +148,7 @@ enum InvoiceStatus {
   APPROVED
   REJECTED
   PRINTED
+  CANCELLED
 }
 
 enum Perusahaan {

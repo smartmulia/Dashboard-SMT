@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import Modal from '../components/UI/Modal'
 import { useAuth } from '../contexts/AuthContext'
 import { formatRupiah, formatDate, formatDateTime, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS, PERUSAHAAN_LABELS } from '../utils/format'
-import { Plus, Eye, Printer, CheckCircle, XCircle, Clock, Send, Download, RefreshCw, ChevronLeft, ChevronRight, Search, CheckSquare, Square } from 'lucide-react'
+import { Plus, Eye, Printer, CheckCircle, XCircle, Clock, Send, Download, RefreshCw, ChevronLeft, ChevronRight, Search, CheckSquare, Square, Trash2, Ban } from 'lucide-react'
 import { downloadInvoicePDF, printInvoicePDF } from '../utils/pdfInvoice'
 
 const STATUS_FILTER = [
@@ -14,6 +14,7 @@ const STATUS_FILTER = [
   { value: 'APPROVED', label: 'Disetujui' },
   { value: 'REJECTED', label: 'Ditolak' },
   { value: 'PRINTED', label: 'Dicetak' },
+  { value: 'CANCELLED', label: 'Dibatalkan' },
 ]
 
 export default function Invoice() {
@@ -29,6 +30,9 @@ export default function Invoice() {
   const [showApprove, setShowApprove] = useState(null)
   const [showReject, setShowReject] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [showDelete, setShowDelete] = useState(null)
+  const [showCancel, setShowCancel] = useState(null)
+  const [cancelReason, setCancelReason] = useState('')
 
   const [items, setItems] = useState([])
   const [selectedItems, setSelectedItems] = useState([])
@@ -49,8 +53,9 @@ export default function Invoice() {
 
   const fetchItems = async () => {
     try {
-      const { data } = await api.get('/items', { params: { status: 'BELUM_TERJUAL', limit: 100 } })
-      setItems(data.data)
+      const { data } = await api.get('/items', { params: { status: 'BELUM_TERJUAL', limit: 2000 } })
+      // Hanya tampilkan barang yang sudah punya harga jual (barang tanpa harga tidak bisa masuk invoice)
+      setItems((data.data || []).filter(i => i.hargaJual && parseFloat(i.hargaJual) > 0))
     } catch {}
   }
 
@@ -157,6 +162,26 @@ export default function Invoice() {
     } catch { toast.error('Gagal download invoice') }
   }
 
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/invoices/${showDelete.id}`)
+      toast.success('Invoice berhasil dihapus')
+      setShowDelete(null)
+      fetchInvoices()
+    } catch (err) { toast.error(err.response?.data?.message || 'Gagal hapus invoice') }
+  }
+
+  const handleCancel = async () => {
+    if (!cancelReason.trim()) return toast.error('Alasan pembatalan wajib diisi')
+    try {
+      await api.post(`/invoices/${showCancel.id}/cancel`, { alasan: cancelReason })
+      toast.success('Invoice dibatalkan, barang dikembalikan ke Belum Terjual')
+      setShowCancel(null)
+      setCancelReason('')
+      fetchInvoices()
+    } catch (err) { toast.error(err.response?.data?.message || 'Gagal batalkan invoice') }
+  }
+
   const totalSelected = selectedItems.reduce((s, i) => s + parseFloat(i.totalHarga || 0), 0)
 
   return (
@@ -248,6 +273,16 @@ export default function Invoice() {
                         {['APPROVED', 'PRINTED'].includes(inv.status) && (
                           <button onClick={() => handleDownload(inv)} className="p-1.5 rounded-lg text-brown-400 hover:text-gold-500 hover:bg-gold-50 dark:hover:bg-gold-900/20" title="Download PDF">
                             <Download className="w-4 h-4" />
+                          </button>
+                        )}
+                        {inv.status === 'DRAFT' && (
+                          <button onClick={() => setShowDelete(inv)} className="p-1.5 rounded-lg text-brown-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Hapus Draft">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canApprove() && ['APPROVED', 'PRINTED'].includes(inv.status) && (
+                          <button onClick={() => setShowCancel(inv)} className="p-1.5 rounded-lg text-brown-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" title="Batalkan Invoice">
+                            <Ban className="w-4 h-4" />
                           </button>
                         )}
                       </div>
@@ -478,6 +513,32 @@ export default function Invoice() {
         <p className="text-brown-700 dark:text-brown-300 mb-3">Invoice: <strong>{showReject?.nomorInvoice}</strong></p>
         <label className="label">Alasan Penolakan *</label>
         <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} className="input-field" rows={3} placeholder="Masukkan alasan penolakan..." />
+      </Modal>
+
+      {/* Delete Draft Modal */}
+      <Modal isOpen={!!showDelete} onClose={() => setShowDelete(null)} title="Hapus Invoice Draft" size="sm"
+        footer={
+          <>
+            <button onClick={() => setShowDelete(null)} className="btn-outline">Batal</button>
+            <button onClick={handleDelete} className="btn-danger">Hapus</button>
+          </>
+        }>
+        <p className="text-brown-700 dark:text-brown-300">Yakin ingin menghapus invoice draft <strong>{showDelete?.nomorInvoice}</strong>?</p>
+        <p className="text-sm text-brown-500 mt-2">Tindakan ini tidak dapat dibatalkan. Barang yang terdaftar akan kembali tersedia untuk invoice lain.</p>
+      </Modal>
+
+      {/* Cancel Approved Modal */}
+      <Modal isOpen={!!showCancel} onClose={() => { setShowCancel(null); setCancelReason('') }} title="Batalkan Invoice" size="sm"
+        footer={
+          <>
+            <button onClick={() => { setShowCancel(null); setCancelReason('') }} className="btn-outline">Kembali</button>
+            <button onClick={handleCancel} className="btn-danger">Batalkan Invoice</button>
+          </>
+        }>
+        <p className="text-brown-700 dark:text-brown-300 mb-2">Invoice: <strong>{showCancel?.nomorInvoice}</strong></p>
+        <p className="text-sm text-amber-600 dark:text-amber-400 mb-3">Semua barang pada invoice ini akan dikembalikan ke status <strong>Belum Terjual</strong>.</p>
+        <label className="label">Alasan Pembatalan *</label>
+        <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} className="input-field" rows={3} placeholder="Masukkan alasan pembatalan..." />
       </Modal>
     </div>
   )
