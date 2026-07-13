@@ -3,6 +3,8 @@ const multer = require('multer');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { requireRole } = require('../middleware/roleCheck');
+const { handleValidation } = require('../middleware/validate');
+const { createItemRules, updateItemRules } = require('../middleware/validators');
 const { getItems, getItemById, createItem, updateItem, deleteItem, importExcel, exportExcel, getStats, getRiwayat } = require('../controllers/itemController');
 
 // Whitelist tipe file Excel untuk import
@@ -25,8 +27,8 @@ router.get('/export', auth, exportExcel);
 router.get('/riwayat', auth, getRiwayat);
 router.get('/', auth, getItems);
 router.get('/:id', auth, getItemById);
-router.post('/', auth, requireRole('ADMIN', 'SUPER_USER'), createItem);
-router.put('/:id', auth, requireRole('ADMIN', 'SUPER_USER'), updateItem);
+router.post('/', auth, requireRole('ADMIN', 'SUPER_USER'), createItemRules, handleValidation, createItem);
+router.put('/:id', auth, requireRole('ADMIN', 'SUPER_USER'), updateItemRules, handleValidation, updateItem);
 router.delete('/:id', auth, requireRole('ADMIN', 'SUPER_USER'), deleteItem);
 router.post('/import/excel', auth, requireRole('ADMIN', 'SUPER_USER'), upload.single('file'), importExcel);
 

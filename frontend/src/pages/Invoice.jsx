@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import Modal from '../components/UI/Modal'
 import { useAuth } from '../contexts/AuthContext'
 import { formatRupiah, formatDate, formatDateTime, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS, PERUSAHAAN_LABELS } from '../utils/format'
-import { Plus, Eye, Printer, CheckCircle, XCircle, Clock, Send, Download, RefreshCw, ChevronLeft, ChevronRight, Search, CheckSquare, Square, Trash2, Ban } from 'lucide-react'
+import { Plus, Eye, Printer, CheckCircle, XCircle, Clock, Send, Download, RefreshCw, ChevronLeft, ChevronRight, Search, CheckSquare, Square, Trash2, Ban, PackagePlus } from 'lucide-react'
 import { downloadInvoicePDF, printInvoicePDF } from '../utils/pdfInvoice'
 
 const STATUS_FILTER = [
@@ -16,6 +16,105 @@ const STATUS_FILTER = [
   { value: 'PRINTED', label: 'Dicetak' },
   { value: 'CANCELLED', label: 'Dibatalkan' },
 ]
+
+// Pemilih barang BELUM_TERJUAL (dipakai modal Buat & Ubah barang invoice).
+// Pencarian & filter grade dilakukan server-side; daftar dibatasi 100 hasil teratas.
+function ItemPicker({ selectedItems, totalSelected, gradeFilter, setGradeFilter, itemSearch, setItemSearch, pilihSemua, batalSemua, pilihGrade, filteredItems, toggleItem, itemsLoading }) {
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="label mb-0">Pilih Barang <span className="text-brown-400 font-normal">(Status: Belum Terjual)</span></p>
+        <span className="text-sm text-gold-600 dark:text-gold-400 font-semibold">
+          {selectedItems.length} dipilih · {formatRupiah(totalSelected)}
+        </span>
+      </div>
+
+      {/* Filter & aksi toolbar */}
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        {/* Grade filter tabs */}
+        <div className="flex gap-1">
+          {['', 'A', 'B', 'C', 'D'].map(g => (
+            <button key={g || 'all'} type="button" onClick={() => setGradeFilter(g)}
+              className={`px-2 py-1 text-xs rounded-lg font-medium transition-colors ${
+                gradeFilter === g
+                  ? 'bg-gold-500 text-white'
+                  : 'bg-brown-100 dark:bg-brown-800 text-brown-600 dark:text-brown-400 hover:bg-brown-200 dark:hover:bg-brown-700'
+              }`}>
+              {g || 'Semua'}
+            </button>
+          ))}
+        </div>
+
+        {/* Search (server-side) */}
+        <div className="relative flex-1 min-w-32">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-brown-400" />
+          <input value={itemSearch} onChange={e => setItemSearch(e.target.value)}
+            placeholder="Cari SBG / jenis / detail..."
+            className="w-full pl-6 pr-2 py-1 text-xs border border-brown-200 dark:border-brown-700 rounded-lg bg-white dark:bg-brown-900 text-brown-800 dark:text-brown-200 focus:outline-none focus:ring-1 focus:ring-gold-400" />
+        </div>
+
+        {/* Pilih / batal */}
+        <button type="button" onClick={pilihSemua}
+          className="flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-lg font-medium transition-colors">
+          <CheckSquare className="w-3 h-3" /> Pilih Hasil
+        </button>
+        <button type="button" onClick={batalSemua}
+          className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-400 rounded-lg font-medium transition-colors">
+          <Square className="w-3 h-3" /> Batal Hasil
+        </button>
+      </div>
+
+      {/* Pilih sesuai Grade quick-select */}
+      <div className="flex flex-wrap items-center gap-1 mb-2">
+        <span className="text-xs text-brown-500 dark:text-brown-400">Pilih semua grade:</span>
+        {[
+          { g: 'A', cls: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+          { g: 'B', cls: 'bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+          { g: 'C', cls: 'bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+          { g: 'D', cls: 'bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+        ].map(({ g, cls }) => (
+          <button key={g} type="button" onClick={() => pilihGrade(g)}
+            className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${cls}`}>
+            Grade {g}
+          </button>
+        ))}
+      </div>
+
+      {/* Daftar barang */}
+      <div className="max-h-52 overflow-y-auto border border-brown-100 dark:border-brown-700 rounded-xl">
+        {itemsLoading ? (
+          <p className="text-center py-8 text-brown-400 text-sm">
+            <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" /> Memuat barang...
+          </p>
+        ) : filteredItems.length === 0 ? (
+          <p className="text-center py-8 text-brown-400 text-sm">
+            {itemSearch || gradeFilter ? 'Tidak ada barang sesuai pencarian' : 'Tidak ada barang tersedia'}
+          </p>
+        ) : filteredItems.map(item => {
+          const sel = selectedItems.find(i => i.id === item.id)
+          return (
+            <div key={item.id} onClick={() => toggleItem(item)}
+              className={`flex items-center gap-3 p-3 cursor-pointer border-b border-brown-50 dark:border-brown-800 hover:bg-gold-50/50 dark:hover:bg-brown-800/30 transition-colors ${sel ? 'bg-gold-50 dark:bg-gold-900/10' : ''}`}>
+              <div className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${sel ? 'bg-gold-500 border-gold-500' : 'border-brown-300 dark:border-brown-600'}`}>
+                {sel && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-brown-800 dark:text-gold-200">{item.nomorSbg} — {item.jenisBarang}</p>
+                <p className="text-xs text-brown-500 truncate">{item.detailBarang}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-semibold text-brown-800 dark:text-gold-300">{formatRupiah(item.totalHarga)}</p>
+                <span className={`text-xs font-medium ${item.grade === 'A' ? 'text-emerald-600' : item.grade === 'B' ? 'text-blue-600' : item.grade === 'C' ? 'text-amber-600' : 'text-red-600'}`}>Grade {item.grade}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[11px] text-brown-400 mt-1">Menampilkan maksimal 100 barang. Gunakan pencarian untuk menemukan barang lain — barang yang sudah dipilih tetap tersimpan meski berpindah pencarian.</p>
+    </div>
+  )
+}
 
 export default function Invoice() {
   const { canApprove, user } = useAuth()
@@ -33,12 +132,14 @@ export default function Invoice() {
   const [showDelete, setShowDelete] = useState(null)
   const [showCancel, setShowCancel] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
+  const [editItemsInvoice, setEditItemsInvoice] = useState(null)
 
   const [items, setItems] = useState([])
+  const [itemsLoading, setItemsLoading] = useState(false)
   const [selectedItems, setSelectedItems] = useState([])
   const [gradeFilter, setGradeFilter] = useState('')
   const [itemSearch, setItemSearch] = useState('')
-  const [form, setForm] = useState({ namaCustomer: '', noTelepon: '', nomorInvoice: '', tanggalInvoice: new Date().toISOString().split('T')[0], perusahaan: 'SERBA_MAS', catatan: '' })
+  const [form, setForm] = useState({ namaCustomer: '', noTelepon: '', tanggalInvoice: new Date().toISOString().split('T')[0], perusahaan: 'SERBA_MAS', catatan: '' })
   const [formLoading, setFormLoading] = useState(false)
 
   const fetchInvoices = async (page = 1) => {
@@ -51,23 +152,56 @@ export default function Invoice() {
     finally { setLoading(false) }
   }
 
-  const fetchItems = async () => {
+  // Ambil barang BELUM_TERJUAL dari server (pencarian & grade dilakukan server-side, M-05).
+  // Hanya barang dengan harga jual > 0 yang bisa masuk invoice.
+  const fetchItems = async ({ search: q = '', grade = '' } = {}) => {
+    setItemsLoading(true)
     try {
-      const { data } = await api.get('/items', { params: { status: 'BELUM_TERJUAL', limit: 2000 } })
-      // Hanya tampilkan barang yang sudah punya harga jual (barang tanpa harga tidak bisa masuk invoice)
+      const { data } = await api.get('/items', {
+        params: { status: 'BELUM_TERJUAL', search: q, grade, limit: 100, sortBy: 'nomorSbg', sortOrder: 'asc' },
+      })
       setItems((data.data || []).filter(i => i.hargaJual && parseFloat(i.hargaJual) > 0))
-    } catch {}
+    } catch {} finally { setItemsLoading(false) }
   }
 
   useEffect(() => { fetchInvoices() }, [statusFilter, search])
 
+  // Debounce pencarian/grade barang saat salah satu modal pemilih barang terbuka
+  useEffect(() => {
+    if (!showCreate && !editItemsInvoice) return
+    const t = setTimeout(() => { fetchItems({ search: itemSearch, grade: gradeFilter }) }, 350)
+    return () => clearTimeout(t)
+  }, [itemSearch, gradeFilter, showCreate, editItemsInvoice])
+
   const openCreate = async () => {
-    await fetchItems()
     setSelectedItems([])
     setGradeFilter('')
     setItemSearch('')
-    setForm({ namaCustomer: '', noTelepon: '', nomorInvoice: `INV-${Date.now()}`, tanggalInvoice: new Date().toISOString().split('T')[0], perusahaan: 'SERBA_MAS', catatan: '' })
+    setForm({ namaCustomer: '', noTelepon: '', tanggalInvoice: new Date().toISOString().split('T')[0], perusahaan: 'SERBA_MAS', catatan: '' })
     setShowCreate(true)
+    fetchItems()
+  }
+
+  const openEditItems = async (inv) => {
+    setGradeFilter('')
+    setItemSearch('')
+    try {
+      // Ambil invoice lengkap untuk memuat item yang sudah ada sebagai pilihan awal
+      const { data } = await api.get(`/invoices/${inv.id}`)
+      const existing = (data.data.items || []).map(it => ({
+        id: it.elektronikId,
+        nomorSbg: it.nomorSbg,
+        jenisBarang: it.jenisBarang,
+        detailBarang: it.detailBarang,
+        hargaJual: it.hargaJual,
+        ppn: it.ppn,
+        totalHarga: it.totalHarga,
+        grade: it.elektronik?.grade,
+      }))
+      setSelectedItems(existing)
+      setEditItemsInvoice(data.data)
+      fetchItems()
+    } catch { toast.error('Gagal memuat data invoice') }
   }
 
   const toggleItem = (item) => {
@@ -76,15 +210,8 @@ export default function Invoice() {
     )
   }
 
-  const filteredItems = items.filter(item => {
-    const matchGrade = !gradeFilter || item.grade === gradeFilter
-    const q = itemSearch.toLowerCase()
-    const matchSearch = !q ||
-      item.nomorSbg?.toLowerCase().includes(q) ||
-      item.jenisBarang?.toLowerCase().includes(q) ||
-      item.detailBarang?.toLowerCase().includes(q)
-    return matchGrade && matchSearch
-  })
+  // Server sudah memfilter grade & pencarian; daftar tampil = items
+  const filteredItems = items
 
   const pilihSemua = () => {
     const toAdd = filteredItems.filter(i => !selectedItems.find(s => s.id === i.id))
@@ -96,9 +223,30 @@ export default function Invoice() {
     setSelectedItems(prev => prev.filter(i => !filteredIds.has(i.id)))
   }
 
-  const pilihGrade = (grade) => {
-    const gradeItems = items.filter(i => i.grade === grade && !selectedItems.find(s => s.id === i.id))
-    setSelectedItems(prev => [...prev, ...gradeItems])
+  // Pilih seluruh barang satu grade (ambil penuh dari server, bukan hanya yang tampil)
+  const pilihGrade = async (grade) => {
+    try {
+      const { data } = await api.get('/items', {
+        params: { status: 'BELUM_TERJUAL', grade, limit: 1000, sortBy: 'nomorSbg', sortOrder: 'asc' },
+      })
+      const gradeItems = (data.data || [])
+        .filter(i => i.hargaJual && parseFloat(i.hargaJual) > 0)
+        .filter(i => !selectedItems.find(s => s.id === i.id))
+      setSelectedItems(prev => [...prev, ...gradeItems])
+    } catch { toast.error('Gagal memilih grade') }
+  }
+
+  const handleUpdateItems = async () => {
+    if (!selectedItems.length) return toast.error('Pilih minimal 1 barang')
+    setFormLoading(true)
+    try {
+      await api.put(`/invoices/${editItemsInvoice.id}/items`, { itemIds: selectedItems.map(i => i.id) })
+      toast.success('Daftar barang invoice berhasil diperbarui')
+      setEditItemsInvoice(null)
+      fetchInvoices()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Gagal memperbarui barang')
+    } finally { setFormLoading(false) }
   }
 
   const handleCreate = async (e) => {
@@ -106,8 +254,8 @@ export default function Invoice() {
     if (!selectedItems.length) return toast.error('Pilih minimal 1 barang')
     setFormLoading(true)
     try {
-      await api.post('/invoices', { ...form, itemIds: selectedItems.map(i => i.id) })
-      toast.success('Invoice berhasil dibuat')
+      const { data } = await api.post('/invoices', { ...form, itemIds: selectedItems.map(i => i.id) })
+      toast.success(data.message || 'Invoice berhasil dibuat')
       setShowCreate(false)
       fetchInvoices()
     } catch (err) {
@@ -251,6 +399,11 @@ export default function Invoice() {
                           <Eye className="w-4 h-4" />
                         </button>
                         {['DRAFT', 'REJECTED'].includes(inv.status) && (
+                          <button onClick={() => openEditItems(inv)} className="p-1.5 rounded-lg text-brown-400 hover:text-gold-600 hover:bg-gold-50 dark:hover:bg-gold-900/20" title="Ubah Barang">
+                            <PackagePlus className="w-4 h-4" />
+                          </button>
+                        )}
+                        {['DRAFT', 'REJECTED'].includes(inv.status) && (
                           <button onClick={() => handleSubmit(inv.id)} className="p-1.5 rounded-lg text-brown-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20" title="Submit Approval">
                             <Send className="w-4 h-4" />
                           </button>
@@ -319,8 +472,8 @@ export default function Invoice() {
         }>
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><label className="label">Nomor Invoice *</label>
-              <input value={form.nomorInvoice} onChange={e => setForm(p => ({...p, nomorInvoice: e.target.value}))} className="input-field" required /></div>
+            <div><label className="label">Nomor Invoice</label>
+              <input value="Otomatis dari sistem (INV-tahun-urut)" disabled className="input-field bg-brown-50 dark:bg-brown-800 text-brown-400 cursor-not-allowed" /></div>
             <div><label className="label">Tanggal Invoice *</label>
               <input type="date" value={form.tanggalInvoice} onChange={e => setForm(p => ({...p, tanggalInvoice: e.target.value}))} className="input-field" required /></div>
             <div><label className="label">Nama Customer *</label>
@@ -336,94 +489,33 @@ export default function Invoice() {
               <input value={form.catatan} onChange={e => setForm(p => ({...p, catatan: e.target.value}))} className="input-field" placeholder="Opsional" /></div>
           </div>
 
-          <div>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-2">
-              <p className="label mb-0">Pilih Barang <span className="text-brown-400 font-normal">(Status: Belum Terjual)</span></p>
-              <span className="text-sm text-gold-600 dark:text-gold-400 font-semibold">
-                {selectedItems.length} dipilih · {formatRupiah(totalSelected)}
-              </span>
-            </div>
-
-            {/* Filter & aksi toolbar */}
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              {/* Grade filter tabs */}
-              <div className="flex gap-1">
-                {['', 'A', 'B', 'C', 'D'].map(g => (
-                  <button key={g || 'all'} type="button" onClick={() => setGradeFilter(g)}
-                    className={`px-2 py-1 text-xs rounded-lg font-medium transition-colors ${
-                      gradeFilter === g
-                        ? 'bg-gold-500 text-white'
-                        : 'bg-brown-100 dark:bg-brown-800 text-brown-600 dark:text-brown-400 hover:bg-brown-200 dark:hover:bg-brown-700'
-                    }`}>
-                    {g || 'Semua'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Search */}
-              <div className="relative flex-1 min-w-32">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-brown-400" />
-                <input value={itemSearch} onChange={e => setItemSearch(e.target.value)}
-                  placeholder="Cari barang..."
-                  className="w-full pl-6 pr-2 py-1 text-xs border border-brown-200 dark:border-brown-700 rounded-lg bg-white dark:bg-brown-900 text-brown-800 dark:text-brown-200 focus:outline-none focus:ring-1 focus:ring-gold-400" />
-              </div>
-
-              {/* Pilih / batal */}
-              <button type="button" onClick={pilihSemua}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-lg font-medium transition-colors">
-                <CheckSquare className="w-3 h-3" /> Pilih Semua
-              </button>
-              <button type="button" onClick={batalSemua}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-400 rounded-lg font-medium transition-colors">
-                <Square className="w-3 h-3" /> Batal
-              </button>
-            </div>
-
-            {/* Pilih sesuai Grade quick-select */}
-            <div className="flex flex-wrap items-center gap-1 mb-2">
-              <span className="text-xs text-brown-500 dark:text-brown-400">Pilih Grade:</span>
-              {[
-                { g: 'A', cls: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-                { g: 'B', cls: 'bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-                { g: 'C', cls: 'bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-                { g: 'D', cls: 'bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-              ].map(({ g, cls }) => (
-                <button key={g} type="button" onClick={() => pilihGrade(g)}
-                  className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${cls}`}>
-                  Grade {g}
-                </button>
-              ))}
-            </div>
-
-            {/* Daftar barang */}
-            <div className="max-h-52 overflow-y-auto border border-brown-100 dark:border-brown-700 rounded-xl">
-              {filteredItems.length === 0 ? (
-                <p className="text-center py-8 text-brown-400 text-sm">
-                  {items.length === 0 ? 'Tidak ada barang tersedia' : 'Tidak ada barang sesuai filter'}
-                </p>
-              ) : filteredItems.map(item => {
-                const sel = selectedItems.find(i => i.id === item.id)
-                return (
-                  <div key={item.id} onClick={() => toggleItem(item)}
-                    className={`flex items-center gap-3 p-3 cursor-pointer border-b border-brown-50 dark:border-brown-800 hover:bg-gold-50/50 dark:hover:bg-brown-800/30 transition-colors ${sel ? 'bg-gold-50 dark:bg-gold-900/10' : ''}`}>
-                    <div className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${sel ? 'bg-gold-500 border-gold-500' : 'border-brown-300 dark:border-brown-600'}`}>
-                      {sel && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-brown-800 dark:text-gold-200">{item.nomorSbg} — {item.jenisBarang}</p>
-                      <p className="text-xs text-brown-500 truncate">{item.detailBarang}</p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-semibold text-brown-800 dark:text-gold-300">{formatRupiah(item.totalHarga)}</p>
-                      <span className={`text-xs font-medium ${item.grade === 'A' ? 'text-emerald-600' : item.grade === 'B' ? 'text-blue-600' : item.grade === 'C' ? 'text-amber-600' : 'text-red-600'}`}>Grade {item.grade}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          <ItemPicker
+            selectedItems={selectedItems} totalSelected={totalSelected}
+            gradeFilter={gradeFilter} setGradeFilter={setGradeFilter}
+            itemSearch={itemSearch} setItemSearch={setItemSearch}
+            pilihSemua={pilihSemua} batalSemua={batalSemua} pilihGrade={pilihGrade}
+            filteredItems={filteredItems} toggleItem={toggleItem} itemsLoading={itemsLoading}
+          />
         </div>
+      </Modal>
+
+      {/* Edit Items Modal (invoice DRAFT/REJECTED) */}
+      <Modal isOpen={!!editItemsInvoice} onClose={() => setEditItemsInvoice(null)} title={`Ubah Barang — ${editItemsInvoice?.nomorInvoice}`} size="xl"
+        footer={
+          <>
+            <button onClick={() => setEditItemsInvoice(null)} className="btn-outline">Batal</button>
+            <button onClick={handleUpdateItems} disabled={formLoading} className="btn-primary">
+              {formLoading ? 'Menyimpan...' : 'Simpan Barang'}
+            </button>
+          </>
+        }>
+        <ItemPicker
+          selectedItems={selectedItems} totalSelected={totalSelected}
+          gradeFilter={gradeFilter} setGradeFilter={setGradeFilter}
+          itemSearch={itemSearch} setItemSearch={setItemSearch}
+          pilihSemua={pilihSemua} batalSemua={batalSemua} pilihGrade={pilihGrade}
+          filteredItems={filteredItems} toggleItem={toggleItem} itemsLoading={itemsLoading}
+        />
       </Modal>
 
       {/* View Invoice Modal */}

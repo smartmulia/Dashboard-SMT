@@ -3,7 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
 const path = require('path');
+const logger = require('./src/utils/logger');
 
 const authRoutes = require('./src/routes/auth');
 const itemRoutes = require('./src/routes/items');
@@ -48,6 +50,9 @@ app.use(cors({
   credentials: true,
 }));
 
+// ── HTTP access log (morgan → winston, tersimpan di logs/combined.log) ──
+app.use(morgan(isProduction ? 'combined' : 'dev', { stream: logger.stream }));
+
 // ── Body parser (limit diturunkan dari 50mb ke 10mb) ──
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -90,7 +95,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack || err.message || String(err));
   // Jangan bocorkan detail error internal di production
   const message = isProduction ? 'Terjadi kesalahan pada server' : (err.message || 'Internal Server Error');
   res.status(err.status || 500).json({ success: false, message });
@@ -98,22 +103,22 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
-  console.log(`Server berjalan di port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`Server berjalan di port ${PORT}`);
+  logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 // ── Graceful shutdown ──
 const prisma = require('./src/utils/prisma');
 const shutdown = async (signal) => {
-  console.log(`\n${signal} diterima, menutup server dengan graceful...`);
+  logger.info(`${signal} diterima, menutup server dengan graceful...`);
   server.close(async () => {
     await prisma.$disconnect();
-    console.log('Server dan koneksi database ditutup.');
+    logger.info('Server dan koneksi database ditutup.');
     process.exit(0);
   });
   // Paksa keluar jika tidak selesai dalam 10 detik
   setTimeout(() => {
-    console.error('Tidak bisa menutup dengan bersih, memaksa keluar.');
+    logger.error('Tidak bisa menutup dengan bersih, memaksa keluar.');
     process.exit(1);
   }, 10000);
 };
