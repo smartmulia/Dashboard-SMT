@@ -23,7 +23,7 @@ const login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     );
 
     await createAuditLog({
@@ -77,6 +77,9 @@ const changePassword = async (req, res) => {
     const { passwordLama, passwordBaru } = req.body;
     if (!passwordLama || !passwordBaru) {
       return res.status(400).json({ success: false, message: 'Password lama dan baru wajib diisi' });
+    }
+    if (passwordBaru.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password baru minimal 6 karakter' });
     }
 
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });

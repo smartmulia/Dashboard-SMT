@@ -19,7 +19,7 @@ function FormField({ label, children }) {
   )
 }
 
-const emptyForm = { nomorSbg: '', grade: 'A', jenisBarang: '', detailBarang: '', keterangan: '', cogs: '', offeringPengepul: '', hargaJual: '', perusahaan: 'SERBA_MAS' }
+const emptyForm = { nomorSbg: '', tanggalLelang: '', grade: 'A', jenisBarang: '', detailBarang: '', keterangan: '', cogs: '', offeringPengepul: '', hargaJual: '', perusahaan: 'SERBA_MAS' }
 
 export default function Elektronik() {
   const { canSeeCogs, canDelete, user } = useAuth()
@@ -40,7 +40,7 @@ export default function Elektronik() {
 
   const [showImport, setShowImport] = useState(false)
   const [importFile, setImportFile] = useState(null)
-  const [importMapping, setImportMapping] = useState({ nomorSbg: '', grade: '', jenisBarang: '', detailBarang: '', keterangan: '', cogs: '', offeringPengepul: '', hargaJual: '' })
+  const [importMapping, setImportMapping] = useState({ nomorSbg: '', tanggalLelang: '', grade: '', jenisBarang: '', detailBarang: '', keterangan: '', cogs: '', offeringPengepul: '', hargaJual: '' })
   const [importColumns, setImportColumns] = useState([])
   const [importLoading, setImportLoading] = useState(false)
   const [importResult, setImportResult] = useState(null)
@@ -83,7 +83,9 @@ export default function Elektronik() {
   const openCreate = () => { setForm(emptyForm); setEditItem(null); setShowForm(true) }
   const openEdit = (item) => {
     setForm({
-      nomorSbg: item.nomorSbg, grade: item.grade, jenisBarang: item.jenisBarang,
+      nomorSbg: item.nomorSbg,
+      tanggalLelang: item.tanggalLelang ? item.tanggalLelang.split('T')[0] : '',
+      grade: item.grade, jenisBarang: item.jenisBarang,
       detailBarang: item.detailBarang, keterangan: item.keterangan || '',
       cogs: item.cogs || '', offeringPengepul: item.offeringPengepul || '',
       hargaJual: item.hargaJual || '', perusahaan: item.perusahaan || 'SERBA_MAS',
@@ -227,6 +229,35 @@ export default function Elektronik() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+
+        {/* Filter tanggal lelang */}
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <span className="text-xs text-brown-500 dark:text-brown-400 flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5" /> Tanggal Lelang:
+          </span>
+          <input
+            type="date"
+            value={filters.startDate}
+            onChange={e => setFilters(p => ({ ...p, startDate: e.target.value }))}
+            className="input-field w-40 text-sm"
+          />
+          <span className="text-xs text-brown-400">s/d</span>
+          <input
+            type="date"
+            value={filters.endDate}
+            min={filters.startDate}
+            onChange={e => setFilters(p => ({ ...p, endDate: e.target.value }))}
+            className="input-field w-40 text-sm"
+          />
+          {(filters.startDate || filters.endDate) && (
+            <button
+              onClick={() => setFilters(p => ({ ...p, startDate: '', endDate: '' }))}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <X className="w-3 h-3" /> Reset Tanggal
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -236,6 +267,7 @@ export default function Elektronik() {
             <thead>
               <tr>
                 <th className="table-header w-12">No</th>
+                <SortTh col="tanggalLelang">Tanggal Lelang</SortTh>
                 <SortTh col="nomorSbg">Nomor SBG</SortTh>
                 <SortTh col="grade">Grade</SortTh>
                 <SortTh col="jenisBarang">Jenis Barang</SortTh>
@@ -253,16 +285,17 @@ export default function Elektronik() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={15} className="text-center py-12 text-brown-400">
+                <tr><td colSpan={16} className="text-center py-12 text-brown-400">
                   <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" /> Memuat data...
                 </td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={15} className="text-center py-12 text-brown-400">
+                <tr><td colSpan={16} className="text-center py-12 text-brown-400">
                   Tidak ada data ditemukan
                 </td></tr>
               ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gold-50/50 dark:hover:bg-brown-800/30 transition-colors">
                   <td className="table-cell text-center text-brown-400">{(pagination.page - 1) * pagination.limit + idx + 1}</td>
+                  <td className="table-cell whitespace-nowrap text-brown-600 dark:text-brown-300">{item.tanggalLelang ? formatDate(item.tanggalLelang) : '-'}</td>
                   <td className="table-cell font-mono font-medium text-brown-800 dark:text-gold-300">{item.nomorSbg}</td>
                   <td className="table-cell">
                     <span className={GRADE_COLORS[item.grade]}>Grade {item.grade}</span>
@@ -352,6 +385,9 @@ export default function Elektronik() {
           <FormField label="Nomor SBG *">
             <input value={form.nomorSbg} onChange={e => handleFormChange('nomorSbg', e.target.value)} className="input-field" placeholder="SBG-001" required disabled={!!editItem} />
           </FormField>
+          <FormField label="Tanggal Lelang">
+            <input type="date" value={form.tanggalLelang} onChange={e => handleFormChange('tanggalLelang', e.target.value)} className="input-field" />
+          </FormField>
           <FormField label="Grade *">
             <select value={form.grade} onChange={e => handleFormChange('grade', e.target.value)} className="input-field" required>
               {GRADE_OPTIONS.map(g => <option key={g} value={g}>Grade {g}</option>)}
@@ -400,6 +436,7 @@ export default function Elektronik() {
           <dl className="space-y-3">
             {[
               ['Nomor SBG', viewItem.nomorSbg],
+              ['Tanggal Lelang', viewItem.tanggalLelang ? formatDate(viewItem.tanggalLelang) : '-'],
               ['Grade', `Grade ${viewItem.grade}`],
               ['Jenis Barang', viewItem.jenisBarang],
               ['Detail Barang', viewItem.detailBarang],
@@ -437,6 +474,7 @@ export default function Elektronik() {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { key: 'nomorSbg', label: 'Nomor SBG *' },
+                  { key: 'tanggalLelang', label: 'Tanggal Lelang' },
                   { key: 'grade', label: 'Grade *' },
                   { key: 'jenisBarang', label: 'Jenis Barang *' },
                   { key: 'detailBarang', label: 'Detail Barang *' },

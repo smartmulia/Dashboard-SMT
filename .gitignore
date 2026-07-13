@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment — JANGAN commit kredensial!
+.env
+.env.local
+.env.production
+*/.env
+*/.env.local
+*/.env.production
+
+# Build output
+dist/
+build/
+*/dist/
+*/build/
+
+# Uploads (file gambar katalog yang diunggah user)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Prisma
+backend/prisma/*.db
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Misc
+*.tmp
+.cache/

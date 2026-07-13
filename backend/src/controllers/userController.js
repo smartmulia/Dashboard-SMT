@@ -20,6 +20,12 @@ const createUser = async (req, res) => {
     if (!nama || !email || !password) {
       return res.status(400).json({ success: false, message: 'Nama, email, dan password wajib diisi' });
     }
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password minimal 6 karakter' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Format email tidak valid' });
+    }
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(400).json({ success: false, message: 'Email sudah terdaftar' });
@@ -117,10 +123,15 @@ const resetPassword = async (req, res) => {
     const id = parseInt(req.params.id);
     const { passwordBaru } = req.body;
 
+    // Wajibkan password baru yang eksplisit & cukup kuat (hindari default lemah)
+    if (!passwordBaru || passwordBaru.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password baru wajib diisi, minimal 6 karakter' });
+    }
+
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ success: false, message: 'User tidak ditemukan' });
 
-    const hashed = await bcrypt.hash(passwordBaru || 'password123', 10);
+    const hashed = await bcrypt.hash(passwordBaru, 10);
     await prisma.user.update({ where: { id }, data: { password: hashed } });
 
     await createAuditLog({

@@ -38,6 +38,7 @@ export const INVOICE_STATUS_LABELS = {
   APPROVED: 'Disetujui',
   REJECTED: 'Ditolak',
   PRINTED: 'Dicetak',
+  CANCELLED: 'Dibatalkan',
 }
 
 export const PERUSAHAAN_LABELS = {
@@ -58,4 +59,5 @@ export const INVOICE_STATUS_COLORS = {
   APPROVED: 'badge-success',
   REJECTED: 'badge-danger',
   PRINTED: 'badge-gold',
+  CANCELLED: 'badge-gray',
 }

@@ -79,15 +79,40 @@ const createInvoice = async (req, res) => {
     const existingInv = await prisma.invoice.findUnique({ where: { nomorInvoice } });
     if (existingInv) return res.status(400).json({ success: false, message: 'Nomor Invoice sudah ada' });
 
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Tidak ada barang dipilih' });
+    }
+    const idList = itemIds.map(Number);
+
     const items = await prisma.elektronik.findMany({
-      where: { id: { in: itemIds.map(Number) } },
+      where: { id: { in: idList } },
     });
 
     if (!items.length) return res.status(400).json({ success: false, message: 'Tidak ada barang dipilih' });
 
+    // Cek barang sudah TERJUAL
     const sudahTerjual = items.filter(i => i.status === 'TERJUAL');
     if (sudahTerjual.length > 0) {
       return res.status(400).json({ success: false, message: `Barang berikut sudah terjual: ${sudahTerjual.map(i => i.nomorSbg).join(', ')}` });
+    }
+
+    // Cek barang harus memiliki harga jual > 0 (cegah invoice Rp 0)
+    const tanpaHarga = items.filter(i => !i.hargaJual || parseFloat(i.hargaJual) <= 0);
+    if (tanpaHarga.length > 0) {
+      return res.status(400).json({ success: false, message: `Barang berikut belum memiliki harga jual: ${tanpaHarga.map(i => i.nomorSbg).join(', ')}` });
+    }
+
+    // Cek race condition: barang sudah masuk invoice lain yang masih aktif
+    const sudahDiInvoice = await prisma.invoiceItem.findMany({
+      where: {
+        elektronikId: { in: idList },
+        invoice: { status: { in: ['DRAFT', 'WAITING_APPROVAL', 'APPROVED', 'PRINTED'] } },
+      },
+      include: { invoice: { select: { nomorInvoice: true } } },
+    });
+    if (sudahDiInvoice.length > 0) {
+      const daftar = sudahDiInvoice.map(x => `${x.nomorSbg} (di ${x.invoice.nomorInvoice})`).join(', ');
+      return res.status(400).json({ success: false, message: `Barang sudah ada di invoice lain yang masih aktif: ${daftar}` });
     }
 
     const invoice = await prisma.invoice.create({
@@ -212,6 +237,11 @@ const approveInvoice = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invoice tidak dalam status menunggu approval' });
     }
 
+    // Segregation of duties: approver tidak boleh pembuat invoice
+    if (invoice.createdById === req.user.id) {
+      return res.status(400).json({ success: false, message: 'Tidak dapat menyetujui invoice yang dibuat sendiri' });
+    }
+
     // Transaction: update invoice + tandai semua barang sebagai TERJUAL
     await prisma.$transaction([
       prisma.invoice.update({
@@ -316,4 +346,85 @@ const printInvoice = async (req, res) => {
   }
 };
 
-module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, submitApproval, approveInvoice, rejectInvoice, printInvoice };
+const deleteInvoice = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+
+    // Hanya invoice DRAFT yang boleh dihapus
+    if (invoice.status !== 'DRAFT') {
+      return res.status(400).json({ success: false, message: 'Hanya invoice berstatus Draft yang dapat dihapus' });
+    }
+
+    if (req.user.role === 'USER' && invoice.createdById !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Akses ditolak' });
+    }
+
+    // invoice_items ikut terhapus otomatis (onDelete: Cascade)
+    await prisma.invoice.delete({ where: { id } });
+
+    await createAuditLog({
+      userId: req.user.id,
+      namaUser: req.user.nama,
+      aktivitas: `HAPUS INVOICE ${invoice.nomorInvoice}`,
+      tabel: 'Invoice',
+      dataLama: { nomorInvoice: invoice.nomorInvoice, namaCustomer: invoice.namaCustomer },
+      ipAddress: req.ip,
+    });
+
+    res.json({ success: true, message: 'Invoice berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const cancelInvoice = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { alasan } = req.body;
+    const invoice = await prisma.invoice.findUnique({ where: { id }, include: { items: true } });
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+
+    // Hanya invoice yang sudah APPROVED/PRINTED yang perlu di-cancel (mengembalikan status barang)
+    if (!['APPROVED', 'PRINTED'].includes(invoice.status)) {
+      return res.status(400).json({ success: false, message: 'Hanya invoice yang sudah disetujui yang dapat dibatalkan' });
+    }
+
+    // Transaction: set invoice CANCELLED + kembalikan barang ke BELUM_TERJUAL
+    await prisma.$transaction([
+      prisma.invoice.update({
+        where: { id },
+        data: { status: 'CANCELLED', rejectedReason: alasan || 'Dibatalkan setelah approval', rejectedAt: new Date() },
+      }),
+      ...invoice.items.map(item =>
+        prisma.elektronik.update({ where: { id: item.elektronikId }, data: { status: 'BELUM_TERJUAL' } })
+      ),
+    ]);
+
+    const updated = await prisma.invoice.findUnique({ where: { id } });
+
+    await createAuditLog({
+      userId: req.user.id,
+      namaUser: req.user.nama,
+      aktivitas: `BATALKAN INVOICE ${invoice.nomorInvoice} — ${invoice.items.length} barang dikembalikan ke BELUM TERJUAL. Alasan: ${alasan || '-'}`,
+      tabel: 'Invoice',
+      ipAddress: req.ip,
+    });
+
+    // Notifikasi ke pembuat invoice
+    await kirimNotifikasi({
+      userIds: [invoice.createdById],
+      judul: 'Invoice Dibatalkan',
+      pesan: `Invoice ${invoice.nomorInvoice} dibatalkan oleh ${req.user.nama}. Alasan: ${alasan || 'Tidak ada alasan'}`,
+      tipe: 'CANCELLED',
+      invoiceId: invoice.id,
+    });
+
+    res.json({ success: true, message: 'Invoice dibatalkan, barang dikembalikan ke status Belum Terjual', data: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, submitApproval, approveInvoice, rejectInvoice, printInvoice, deleteInvoice, cancelInvoice };
