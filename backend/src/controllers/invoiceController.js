@@ -9,6 +9,59 @@ async function kirimNotifikasi({ userIds, judul, pesan, tipe, invoiceId }) {
   });
 }
 
+// Generate nomor invoice sekuensial: INV-YYYY-NNNN (mis. INV-2026-0001).
+// Nomor diambil dari urutan terbesar tahun berjalan, +1. Race condition
+// ditangani dengan retry pada unique constraint di createInvoice.
+async function generateNomorInvoice() {
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const last = await prisma.invoice.findFirst({
+    where: { nomorInvoice: { startsWith: prefix } },
+    orderBy: { nomorInvoice: 'desc' },
+    select: { nomorInvoice: true },
+  });
+  let seq = 1;
+  if (last) {
+    const n = parseInt(last.nomorInvoice.slice(prefix.length), 10);
+    if (!isNaN(n)) seq = n + 1;
+  }
+  return `${prefix}${String(seq).padStart(4, '0')}`;
+}
+
+// Validasi sekumpulan barang layak masuk invoice: ada, belum terjual,
+// punya harga jual > 0, dan tidak sedang dipakai invoice aktif lain.
+// excludeInvoiceId dipakai saat edit item agar barang di invoice ini sendiri diabaikan.
+// Return { items } bila lolos, atau { error } bila ada masalah.
+async function validasiBarangInvoice(idList, excludeInvoiceId = null) {
+  const items = await prisma.elektronik.findMany({ where: { id: { in: idList } } });
+  if (!items.length) return { error: 'Tidak ada barang dipilih' };
+
+  const sudahTerjual = items.filter(i => i.status === 'TERJUAL');
+  if (sudahTerjual.length > 0) {
+    return { error: `Barang berikut sudah terjual: ${sudahTerjual.map(i => i.nomorSbg).join(', ')}` };
+  }
+
+  const tanpaHarga = items.filter(i => !i.hargaJual || parseFloat(i.hargaJual) <= 0);
+  if (tanpaHarga.length > 0) {
+    return { error: `Barang berikut belum memiliki harga jual: ${tanpaHarga.map(i => i.nomorSbg).join(', ')}` };
+  }
+
+  const dipakai = await prisma.invoiceItem.findMany({
+    where: {
+      elektronikId: { in: idList },
+      ...(excludeInvoiceId ? { invoiceId: { not: excludeInvoiceId } } : {}),
+      invoice: { status: { in: ['DRAFT', 'WAITING_APPROVAL', 'APPROVED', 'PRINTED'] } },
+    },
+    include: { invoice: { select: { nomorInvoice: true } } },
+  });
+  if (dipakai.length > 0) {
+    const daftar = dipakai.map(x => `${x.nomorSbg} (di ${x.invoice.nomorInvoice})`).join(', ');
+    return { error: `Barang sudah ada di invoice lain yang masih aktif: ${daftar}` };
+  }
+
+  return { items };
+}
+
 const getInvoices = async (req, res) => {
   try {
     const { page = 1, limit = 20, status, search, perusahaan } = req.query;
@@ -70,86 +123,68 @@ const getInvoiceById = async (req, res) => {
 
 const createInvoice = async (req, res) => {
   try {
-    const { namaCustomer, noTelepon, nomorInvoice, tanggalInvoice, perusahaan, catatan, itemIds } = req.body;
+    const { namaCustomer, noTelepon, tanggalInvoice, perusahaan, catatan, itemIds } = req.body;
 
-    if (!namaCustomer || !nomorInvoice || !tanggalInvoice) {
+    if (!namaCustomer || !tanggalInvoice) {
       return res.status(400).json({ success: false, message: 'Field wajib tidak lengkap' });
     }
-
-    const existingInv = await prisma.invoice.findUnique({ where: { nomorInvoice } });
-    if (existingInv) return res.status(400).json({ success: false, message: 'Nomor Invoice sudah ada' });
 
     if (!Array.isArray(itemIds) || itemIds.length === 0) {
       return res.status(400).json({ success: false, message: 'Tidak ada barang dipilih' });
     }
     const idList = itemIds.map(Number);
 
-    const items = await prisma.elektronik.findMany({
-      where: { id: { in: idList } },
-    });
+    const cek = await validasiBarangInvoice(idList);
+    if (cek.error) return res.status(400).json({ success: false, message: cek.error });
+    const items = cek.items;
 
-    if (!items.length) return res.status(400).json({ success: false, message: 'Tidak ada barang dipilih' });
-
-    // Cek barang sudah TERJUAL
-    const sudahTerjual = items.filter(i => i.status === 'TERJUAL');
-    if (sudahTerjual.length > 0) {
-      return res.status(400).json({ success: false, message: `Barang berikut sudah terjual: ${sudahTerjual.map(i => i.nomorSbg).join(', ')}` });
+    // Generate nomor invoice di backend + retry bila terjadi tabrakan (unique constraint)
+    let invoice = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const nomorInvoice = await generateNomorInvoice();
+      try {
+        invoice = await prisma.invoice.create({
+          data: {
+            namaCustomer,
+            noTelepon,
+            nomorInvoice,
+            tanggalInvoice: new Date(tanggalInvoice),
+            perusahaan: perusahaan || 'SERBA_MAS',
+            catatan: catatan || null,
+            createdById: req.user.id,
+            status: 'DRAFT',
+            items: {
+              create: items.map(item => ({
+                elektronikId: item.id,
+                nomorSbg: item.nomorSbg,
+                jenisBarang: item.jenisBarang,
+                detailBarang: item.detailBarang,
+                hargaJual: parseFloat(item.hargaJual || 0),
+                ppn: parseFloat(item.ppn || 0),
+                totalHarga: parseFloat(item.totalHarga || 0),
+              })),
+            },
+          },
+          include: { items: true },
+        });
+        break;
+      } catch (e) {
+        // P2002 = unique constraint (nomor invoice tabrakan) → coba nomor berikutnya
+        if (e.code === 'P2002' && attempt < 4) continue;
+        throw e;
+      }
     }
-
-    // Cek barang harus memiliki harga jual > 0 (cegah invoice Rp 0)
-    const tanpaHarga = items.filter(i => !i.hargaJual || parseFloat(i.hargaJual) <= 0);
-    if (tanpaHarga.length > 0) {
-      return res.status(400).json({ success: false, message: `Barang berikut belum memiliki harga jual: ${tanpaHarga.map(i => i.nomorSbg).join(', ')}` });
-    }
-
-    // Cek race condition: barang sudah masuk invoice lain yang masih aktif
-    const sudahDiInvoice = await prisma.invoiceItem.findMany({
-      where: {
-        elektronikId: { in: idList },
-        invoice: { status: { in: ['DRAFT', 'WAITING_APPROVAL', 'APPROVED', 'PRINTED'] } },
-      },
-      include: { invoice: { select: { nomorInvoice: true } } },
-    });
-    if (sudahDiInvoice.length > 0) {
-      const daftar = sudahDiInvoice.map(x => `${x.nomorSbg} (di ${x.invoice.nomorInvoice})`).join(', ');
-      return res.status(400).json({ success: false, message: `Barang sudah ada di invoice lain yang masih aktif: ${daftar}` });
-    }
-
-    const invoice = await prisma.invoice.create({
-      data: {
-        namaCustomer,
-        noTelepon,
-        nomorInvoice,
-        tanggalInvoice: new Date(tanggalInvoice),
-        perusahaan: perusahaan || 'SERBA_MAS',
-        catatan: catatan || null,
-        createdById: req.user.id,
-        status: 'DRAFT',
-        items: {
-          create: items.map(item => ({
-            elektronikId: item.id,
-            nomorSbg: item.nomorSbg,
-            jenisBarang: item.jenisBarang,
-            detailBarang: item.detailBarang,
-            hargaJual: parseFloat(item.hargaJual || 0),
-            ppn: parseFloat(item.ppn || 0),
-            totalHarga: parseFloat(item.totalHarga || 0),
-          })),
-        },
-      },
-      include: { items: true },
-    });
 
     await createAuditLog({
       userId: req.user.id,
       namaUser: req.user.nama,
-      aktivitas: `BUAT INVOICE ${nomorInvoice}`,
+      aktivitas: `BUAT INVOICE ${invoice.nomorInvoice}`,
       tabel: 'Invoice',
-      dataBaru: { nomorInvoice, namaCustomer },
+      dataBaru: { nomorInvoice: invoice.nomorInvoice, namaCustomer },
       ipAddress: req.ip,
     });
 
-    res.status(201).json({ success: true, message: 'Invoice berhasil dibuat', data: invoice });
+    res.status(201).json({ success: true, message: `Invoice ${invoice.nomorInvoice} berhasil dibuat`, data: invoice });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -183,6 +218,64 @@ const updateInvoice = async (req, res) => {
     });
 
     res.json({ success: true, message: 'Invoice berhasil diperbarui', data: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Ganti/atur ulang daftar barang pada invoice DRAFT atau REJECTED (M-01)
+const updateInvoiceItems = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { itemIds } = req.body;
+
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice tidak ditemukan' });
+
+    if (!['DRAFT', 'REJECTED'].includes(invoice.status)) {
+      return res.status(400).json({ success: false, message: 'Item hanya dapat diubah pada invoice Draft atau Ditolak' });
+    }
+    if (req.user.role === 'USER' && invoice.createdById !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Akses ditolak' });
+    }
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Minimal 1 barang harus dipilih' });
+    }
+
+    const idList = itemIds.map(Number);
+    // Abaikan pemakaian pada invoice ini sendiri (barang lama boleh dipertahankan)
+    const cek = await validasiBarangInvoice(idList, id);
+    if (cek.error) return res.status(400).json({ success: false, message: cek.error });
+    const items = cek.items;
+
+    // Ganti seluruh item dalam satu transaksi
+    await prisma.$transaction([
+      prisma.invoiceItem.deleteMany({ where: { invoiceId: id } }),
+      prisma.invoiceItem.createMany({
+        data: items.map(item => ({
+          invoiceId: id,
+          elektronikId: item.id,
+          nomorSbg: item.nomorSbg,
+          jenisBarang: item.jenisBarang,
+          detailBarang: item.detailBarang,
+          hargaJual: parseFloat(item.hargaJual || 0),
+          ppn: parseFloat(item.ppn || 0),
+          totalHarga: parseFloat(item.totalHarga || 0),
+        })),
+      }),
+    ]);
+
+    const updated = await prisma.invoice.findUnique({ where: { id }, include: { items: true } });
+
+    await createAuditLog({
+      userId: req.user.id,
+      namaUser: req.user.nama,
+      aktivitas: `UBAH ITEM INVOICE ${invoice.nomorInvoice} — ${items.length} barang`,
+      tabel: 'Invoice',
+      ipAddress: req.ip,
+    });
+
+    res.json({ success: true, message: 'Daftar barang invoice berhasil diperbarui', data: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -427,4 +520,4 @@ const cancelInvoice = async (req, res) => {
   }
 };
 
-module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, submitApproval, approveInvoice, rejectInvoice, printInvoice, deleteInvoice, cancelInvoice };
+module.exports = { getInvoices, getInvoiceById, createInvoice, updateInvoice, updateInvoiceItems, submitApproval, approveInvoice, rejectInvoice, printInvoice, deleteInvoice, cancelInvoice };
