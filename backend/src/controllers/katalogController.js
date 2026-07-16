@@ -1,8 +1,5 @@
 const prisma = require('../utils/prisma');
-const path = require('path');
-const fs = require('fs');
-
-const UPLOADS_DIR = path.join(__dirname, '../../uploads/katalog');
+const { simpanGambar, hapusGambar: hapusFileGambar } = require('../utils/storage');
 
 const getKatalog = async (req, res) => {
   try {
@@ -49,7 +46,7 @@ const createKatalog = async (req, res) => {
     }
     let gambar = null;
     if (req.file) {
-      gambar = `/uploads/katalog/${req.file.filename}`;
+      gambar = await simpanGambar(req.file, 'katalog');
     }
     const item = await prisma.katalogEmas.create({
       data: {
@@ -81,12 +78,9 @@ const updateKatalog = async (req, res) => {
     let gambar = existing.gambar;
 
     if (req.file) {
-      // Hapus gambar lama jika ada
-      if (existing.gambar) {
-        const oldPath = path.join(__dirname, '../../', existing.gambar);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      gambar = `/uploads/katalog/${req.file.filename}`;
+      // Hapus gambar lama jika ada (OSS atau lokal, terdeteksi otomatis)
+      if (existing.gambar) await hapusFileGambar(existing.gambar);
+      gambar = await simpanGambar(req.file, 'katalog');
     }
 
     const item = await prisma.katalogEmas.update({
@@ -116,10 +110,7 @@ const deleteKatalog = async (req, res) => {
     const existing = await prisma.katalogEmas.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ success: false, message: 'Item tidak ditemukan' });
 
-    if (existing.gambar) {
-      const imgPath = path.join(__dirname, '../../', existing.gambar);
-      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-    }
+    if (existing.gambar) await hapusFileGambar(existing.gambar);
     await prisma.katalogEmas.delete({ where: { id } });
     res.json({ success: true, message: 'Item berhasil dihapus' });
   } catch (err) {
@@ -132,10 +123,7 @@ const hapusGambar = async (req, res) => {
     const id = parseInt(req.params.id);
     const existing = await prisma.katalogEmas.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ success: false, message: 'Item tidak ditemukan' });
-    if (existing.gambar) {
-      const imgPath = path.join(__dirname, '../../', existing.gambar);
-      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-    }
+    if (existing.gambar) await hapusFileGambar(existing.gambar);
     await prisma.katalogEmas.update({ where: { id }, data: { gambar: null } });
     res.json({ success: true, message: 'Gambar berhasil dihapus' });
   } catch (err) {
