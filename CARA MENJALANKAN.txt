@@ -136,3 +136,10 @@ ERROR: "prisma: command not found"
 → Jalankan dulu: npm install (di folder backend)
 
 ================================================================
+Kalau nanti ada perubahan lagi
+
+Misalnya kamu mengedit file di Visual Studio Code, lakukan:
+git status
+git add .
+git commit -m "Deskripsi perubahan"
+git push origin main
